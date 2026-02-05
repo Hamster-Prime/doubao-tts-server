@@ -27,11 +27,14 @@ DEFAULT_CONFIG = {
 
 # 可用音色列表
 VOICES = [
-    {"id": "zh_female_cancan_mars_bigtts", "name": "灿灿 - 活泼女声"},
-    {"id": "saturn_zh_female_keainvsheng_tob", "name": "可爱女生"},
-    {"id": "saturn_zh_female_tiaopigongzhu_tob", "name": "调皮公主"},
-    {"id": "saturn_zh_male_shuanglangshaonian_tob", "name": "爽朗少年"},
-    {"id": "saturn_zh_male_tiancaitongzhuo_tob", "name": "天才同桌"},
+    {"id": "zh_female_cancan_mars_bigtts", "name": "知性灿灿 - 默认"},
+    {"id": "zh_female_shuangkuaisisi_moon_bigtts", "name": "爽快思思"},
+    {"id": "zh_female_tiexinnvsheng_mars_bigtts", "name": "贴心女生"},
+    {"id": "zh_female_jitangmeimei_mars_bigtts", "name": "鸡汤妹妹"},
+    {"id": "zh_female_mengyatou_mars_bigtts", "name": "萌丫头"},
+    {"id": "zh_male_shaonianzixin_moon_bigtts", "name": "少年梓辛"},
+    {"id": "zh_male_wennuanahu_moon_bigtts", "name": "温暖阿虎"},
+    {"id": "zh_male_jieshuonansheng_mars_bigtts", "name": "磁性解说"},
 ]
 
 def load_config():
@@ -169,8 +172,10 @@ def api_config():
         config = load_config()
         if data.get('appid') and '*' not in data['appid']:
             config['appid'] = data['appid']
-        if data.get('access_token') and data['access_token'] != '********':
-            config['access_token'] = data['access_token']
+        # 只有当token不为空且不包含星号时才更新
+        token = data.get('access_token', '')
+        if token and '*' not in token:
+            config['access_token'] = token
         if data.get('default_voice'):
             config['default_voice'] = data['default_voice']
         save_config(config)
