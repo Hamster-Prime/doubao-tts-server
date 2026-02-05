@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""TTS服务 - 支持豆包和腾讯云"""
+"""TTS服务 - 支持火山引擎、腾讯云、Edge TTS"""
 
-import os, json, base64, uuid, hmac, hashlib, time
+import os, json, base64, uuid, hmac, hashlib, time, asyncio, io
 from datetime import datetime
 from flask import Flask, request, Response, render_template_string, jsonify
 import requests
+import edge_tts
 
 app = Flask(__name__)
 CONFIG_FILE = '/opt/doubao-tts/config.json'
@@ -14,7 +15,8 @@ DEFAULT_CONFIG = {
     'provider': 'doubao', 'appid': '', 'access_token': '',
     'default_voice': 'zh_female_cancan_mars_bigtts', 'cluster': 'volcano_tts',
     'tencent_secret_id': '', 'tencent_secret_key': '',
-    'tencent_voice': '501002', 'tencent_region': 'ap-guangzhou'
+    'tencent_voice': '501002', 'tencent_region': 'ap-guangzhou',
+    'edge_voice': 'zh-CN-XiaoxiaoNeural'
 }
 
 DOUBAO_VOICES = [
@@ -38,6 +40,29 @@ TENCENT_VOICES = [
     {"id": "601010", "name": "爱小娇 - 多情感女声"},
 ]
 
+EDGE_VOICES = [
+    {"id": "zh-CN-XiaoxiaoNeural", "name": "晓晓 - 女声"},
+    {"id": "zh-CN-YunxiNeural", "name": "云希 - 男声"},
+    {"id": "zh-CN-YunjianNeural", "name": "云健 - 男声"},
+    {"id": "zh-CN-XiaoyiNeural", "name": "晓伊 - 女声"},
+    {"id": "zh-CN-YunyangNeural", "name": "云扬 - 新闻"},
+    {"id": "zh-CN-XiaochenNeural", "name": "晓辰 - 女声"},
+    {"id": "zh-CN-XiaohanNeural", "name": "晓涵 - 女声"},
+    {"id": "zh-CN-XiaomengNeural", "name": "晓梦 - 女声"},
+    {"id": "zh-CN-XiaomoNeural", "name": "晓墨 - 女声"},
+    {"id": "zh-CN-XiaoqiuNeural", "name": "晓秋 - 女声"},
+    {"id": "zh-CN-XiaoruiNeural", "name": "晓睿 - 女声"},
+    {"id": "zh-CN-XiaoshuangNeural", "name": "晓双 - 童声"},
+    {"id": "zh-CN-XiaoxuanNeural", "name": "晓萱 - 女声"},
+    {"id": "zh-CN-XiaoyanNeural", "name": "晓颜 - 女声"},
+    {"id": "zh-CN-XiaoyouNeural", "name": "晓悠 - 童声"},
+    {"id": "zh-CN-YunfengNeural", "name": "云枫 - 男声"},
+    {"id": "zh-CN-YunhaoNeural", "name": "云皓 - 男声"},
+    {"id": "zh-CN-YunxiaNeural", "name": "云夏 - 男声"},
+    {"id": "zh-CN-YunyeNeural", "name": "云野 - 男声"},
+    {"id": "zh-CN-YunzeNeural", "name": "云泽 - 男声"},
+]
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
@@ -56,9 +81,11 @@ def load_stats():
         with open(STATS_FILE, 'r') as f:
             data = json.load(f)
             if 'doubao' not in data:
-                data = {'doubao': {'total_chars': data.get('total_chars',0), 'total_requests': data.get('total_requests',0), 'history': data.get('history',[])}, 'tencent': {'total_chars':0,'total_requests':0,'history':[]}}
+                data = {'doubao': {'total_chars': data.get('total_chars',0), 'total_requests': data.get('total_requests',0), 'history': data.get('history',[])}, 'tencent': {'total_chars':0,'total_requests':0,'history':[]}, 'edge': {'total_chars':0,'total_requests':0,'history':[]}}
+            if 'edge' not in data:
+                data['edge'] = {'total_chars':0,'total_requests':0,'history':[]}
             return data
-    return {'doubao': {'total_chars':0,'total_requests':0,'history':[]}, 'tencent': {'total_chars':0,'total_requests':0,'history':[]}}
+    return {'doubao': {'total_chars':0,'total_requests':0,'history':[]}, 'tencent': {'total_chars':0,'total_requests':0,'history':[]}, 'edge': {'total_chars':0,'total_requests':0,'history':[]}}
 
 def save_stats(stats):
     os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
@@ -127,6 +154,19 @@ def synthesize_tencent(text, voice, speed=0):
         return None, f"腾讯云错误: {result.get('Response',{}).get('Error',{}).get('Message',str(result))}"
     except Exception as e: return None, str(e)
 
+def synthesize_edge(text, voice, rate='+0%'):
+    async def _synthesize():
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        audio_data = io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data.write(chunk["data"])
+        return audio_data.getvalue()
+    try:
+        return asyncio.run(_synthesize()), None
+    except Exception as e:
+        return None, str(e)
+
 @app.route('/speech/stream', methods=['POST'])
 def speech_stream():
     try:
@@ -146,6 +186,10 @@ def speech_stream():
         if provider == 'tencent':
             voice = data.get('voice', config.get('tencent_voice', '501002'))
             audio, error = synthesize_tencent(text, voice, speed_val)
+        elif provider == 'edge':
+            voice = data.get('voice', config.get('edge_voice', 'zh-CN-XiaoxiaoNeural'))
+            edge_rate = f'+{int(pct)}%' if pct >= 0 else f'{int(pct)}%'
+            audio, error = synthesize_edge(text, voice, edge_rate)
         else:
             voice = data.get('voice', config.get('default_voice'))
             audio, error = synthesize_doubao(text, voice, speed_ratio)
@@ -176,6 +220,7 @@ def api_config():
         if data.get('tencent_secret_id') and '*' not in data['tencent_secret_id']: config['tencent_secret_id'] = data['tencent_secret_id']
         if data.get('tencent_secret_key') and '*' not in data['tencent_secret_key']: config['tencent_secret_key'] = data['tencent_secret_key']
         if data.get('tencent_voice'): config['tencent_voice'] = data['tencent_voice']
+        if data.get('edge_voice'): config['edge_voice'] = data['edge_voice']
         save_config(config)
         return jsonify({'status': 'ok'})
 
@@ -186,7 +231,9 @@ def api_stats():
 @app.route('/api/voices', methods=['GET'])
 def api_voices():
     provider = request.args.get('provider', 'doubao')
-    return jsonify(TENCENT_VOICES if provider == 'tencent' else DOUBAO_VOICES)
+    if provider == 'tencent': return jsonify(TENCENT_VOICES)
+    elif provider == 'edge': return jsonify(EDGE_VOICES)
+    return jsonify(DOUBAO_VOICES)
 
 @app.route('/')
 def index():
@@ -202,6 +249,7 @@ def index():
         has_tencent=bool(config.get('tencent_secret_id') and config.get('tencent_secret_key')),
         has_token=bool(config.get('access_token')), has_tencent_key=bool(config.get('tencent_secret_key')),
         default_voice=config.get('default_voice',''), tencent_voice=config.get('tencent_voice','501002'),
+        edge_voice=config.get('edge_voice','zh-CN-XiaoxiaoNeural'),
         appid=appid, tencent_secret_id=sid)
 
 HTML_TEMPLATE = '''<!DOCTYPE html>
@@ -245,6 +293,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5}
 <strong>腾讯云</strong><br>
 <span class="status {% if has_tencent %}status-ok{% else %}status-error{% endif %}">{% if has_tencent %}已配置{% else %}未配置{% endif %}</span>
 </div>
+<div class="provider-btn {% if provider == 'edge' %}active{% endif %}" data-provider="edge" onclick="setProvider('edge')">
+<strong>Edge</strong><br>
+<span class="status status-ok">免费</span>
+</div>
 </div>
 </div>
 <div class="card">
@@ -273,6 +325,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5}
 <div class="form-group"><label>SecretKey</label><input type="password" id="tencent-secret-key" placeholder="{% if has_tencent_key %}已配置，留空保持不变{% else %}腾讯云SecretKey{% endif %}"></div>
 <div class="form-group"><label>默认音色</label><select id="tencent-voice"></select></div>
 </div>
+<div id="edge-settings" style="display:{% if provider == 'edge' %}block{% else %}none{% endif %}">
+<div class="form-group"><label>默认音色</label><select id="edge-voice"></select></div>
+<p style="color:#666;font-size:12px;margin-top:8px">Edge TTS 免费使用，无需配置API密钥</p>
+</div>
 <button class="btn btn-primary" onclick="saveConfig()">保存设置</button>
 </div>
 <div class="card">
@@ -288,6 +344,7 @@ const serverIp = '{{ server_ip }}';
 let currentProvider = '{{ provider }}';
 const defaultDoubaoVoice = '{{ default_voice }}';
 const defaultTencentVoice = '{{ tencent_voice }}';
+const defaultEdgeVoice = '{{ edge_voice }}';
 let allStats = {};
 
 async function loadStats() {
@@ -320,7 +377,7 @@ async function loadVoices(provider, selectId, defaultVoice) {
 }
 
 function updateLegadoConfig() {
-    const voice = currentProvider === 'tencent' ? document.getElementById('tencent-voice').value : document.getElementById('doubao-voice').value;
+    const voice = currentProvider === 'tencent' ? document.getElementById('tencent-voice').value : currentProvider === 'edge' ? document.getElementById('edge-voice').value : document.getElementById('doubao-voice').value;
     const lb = String.fromCharCode(123,123), rb = String.fromCharCode(125,125);
     const config = "名称: TTS服务\\nurl: http://" + serverIp + "/speech/stream,{\\\"method\\\":\\\"POST\\\",\\\"body\\\":{\\\"text\\\":\\\"" + lb + "speakText" + rb + "\\\",\\\"voice\\\":\\\"" + voice + "\\\",\\\"rate\\\":\\\"" + lb + "String(speakSpeed)" + rb + "%\\\"},\\\"headers\\\":{\\\"Content-Type\\\":\\\"application/json\\\"}}\\nContent-Type: audio/mp3\\n并发率: 0";
     document.getElementById('legado-config').textContent = config;
@@ -331,28 +388,28 @@ function setProvider(provider) {
     document.querySelectorAll('.provider-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.provider === provider));
     document.getElementById('doubao-settings').style.display = provider === 'doubao' ? 'block' : 'none';
     document.getElementById('tencent-settings').style.display = provider === 'tencent' ? 'block' : 'none';
+    document.getElementById('edge-settings').style.display = provider === 'edge' ? 'block' : 'none';
     updateStatsDisplay();
     updateLegadoConfig();
     fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({provider})});
 }
 
 async function saveConfig() {
-    const data = currentProvider === 'tencent' ? {
-        tencent_secret_id: document.getElementById('tencent-secret-id').value,
-        tencent_secret_key: document.getElementById('tencent-secret-key').value || '***',
-        tencent_voice: document.getElementById('tencent-voice').value
-    } : {
-        appid: document.getElementById('appid').value,
-        access_token: document.getElementById('access-token').value || '***',
-        default_voice: document.getElementById('doubao-voice').value
-    };
+    let data;
+    if (currentProvider === 'tencent') {
+        data = {tencent_secret_id: document.getElementById('tencent-secret-id').value, tencent_secret_key: document.getElementById('tencent-secret-key').value || '***', tencent_voice: document.getElementById('tencent-voice').value};
+    } else if (currentProvider === 'edge') {
+        data = {edge_voice: document.getElementById('edge-voice').value};
+    } else {
+        data = {appid: document.getElementById('appid').value, access_token: document.getElementById('access-token').value || '***', default_voice: document.getElementById('doubao-voice').value};
+    }
     await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
     showToast('设置已保存'); location.reload();
 }
 
 async function testTTS() {
     const text = document.getElementById('test-text').value;
-    const voice = currentProvider === 'tencent' ? document.getElementById('tencent-voice').value : document.getElementById('doubao-voice').value;
+    const voice = currentProvider === 'tencent' ? document.getElementById('tencent-voice').value : currentProvider === 'edge' ? document.getElementById('edge-voice').value : document.getElementById('doubao-voice').value;
     const res = await fetch('/speech/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text, voice, rate:'0%'})});
     if (res.ok) {
         const blob = await res.blob();
@@ -363,9 +420,10 @@ async function testTTS() {
 
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
 
-loadStats(); loadVoices('doubao','doubao-voice',defaultDoubaoVoice); loadVoices('tencent','tencent-voice',defaultTencentVoice);
+loadStats(); loadVoices('doubao','doubao-voice',defaultDoubaoVoice); loadVoices('tencent','tencent-voice',defaultTencentVoice); loadVoices('edge','edge-voice',defaultEdgeVoice);
 document.getElementById('doubao-voice').addEventListener('change', updateLegadoConfig);
 document.getElementById('tencent-voice').addEventListener('change', updateLegadoConfig);
+document.getElementById('edge-voice').addEventListener('change', updateLegadoConfig);
 setTimeout(updateLegadoConfig, 500); setInterval(loadStats, 30000);
 </script></body></html>'''
 
