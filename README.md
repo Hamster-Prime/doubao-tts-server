@@ -56,19 +56,28 @@ sudo systemctl start legado-tts
 ## 可用音色
 
 ### 火山引擎
+
 | 音色ID | 名称 |
 |--------|------|
 | zh_female_cancan_mars_bigtts | 知性灿灿 |
 | zh_female_shuangkuaisisi_moon_bigtts | 爽快思思 |
+| zh_female_tiexinnvsheng_mars_bigtts | 贴心女生 |
+| zh_female_jitangmeimei_mars_bigtts | 鸡汤妹妹 |
+| zh_female_mengyatou_mars_bigtts | 萌丫头 |
+| zh_male_shaonianzixin_moon_bigtts | 少年梓辛 |
 | zh_male_wennuanahu_moon_bigtts | 温暖阿虎 |
 | zh_male_jieshuonansheng_mars_bigtts | 磁性解说 |
 
 ### 腾讯云
+
 | 音色ID | 名称 |
 |--------|------|
 | 501002 | 智菊 - 阅读女声 |
 | 501000 | 智斌 - 阅读男声 |
+| 501001 | 智兰 - 资讯女声 |
+| 501003 | 智宇 - 阅读男声 |
 | 601009 | 爱小芊 - 多情感女声 |
+| 601008 | 爱小豪 - 多情感男声 |
 | 601010 | 爱小娇 - 多情感女声 |
 
 ## License
