@@ -1,0 +1,13 @@
+[Unit]
+Description=Doubao TTS Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/doubao-tts-server
+ExecStart=/usr/bin/python3 /opt/doubao-tts-server/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
