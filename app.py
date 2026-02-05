@@ -28,10 +28,10 @@ DEFAULT_CONFIG = {
 # 可用音色列表
 VOICES = [
     {"id": "zh_female_cancan_mars_bigtts", "name": "灿灿 - 活泼女声"},
-    {"id": "zh_male_chunhou_mars_bigtts", "name": "淳厚 - 淳厚男声"},
-    {"id": "zh_female_shuangkuai_mars_bigtts", "name": "爽快 - 爽快女声"},
-    {"id": "zh_male_yangguang_mars_bigtts", "name": "阳光 - 阳光男声"},
-    {"id": "zh_female_tianmei_mars_bigtts", "name": "甜美 - 甜美女声"},
+    {"id": "saturn_zh_female_keainvsheng_tob", "name": "可爱女生"},
+    {"id": "saturn_zh_female_tiaopigongzhu_tob", "name": "调皮公主"},
+    {"id": "saturn_zh_male_shuanglangshaonian_tob", "name": "爽朗少年"},
+    {"id": "saturn_zh_male_tiancaitongzhuo_tob", "name": "天才同桌"},
 ]
 
 def load_config():
