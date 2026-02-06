@@ -196,12 +196,16 @@ def api_config():
     config = load_config()
     if request.method == 'POST':
         data = request.json
-        # Only update keys that are present in the request
-        for key in ['provider', 'appid', 'default_voice', 'tencent_secret_id', 'tencent_voice', 'edge_voice']:
+        # Only update keys that are present in the request and don't contain mask
+        for key in ['provider', 'default_voice', 'tencent_voice', 'edge_voice']:
              if key in data: config[key] = data[key]
-        # Handle sensitive keys separately to avoid overwriting with '***'
+        # Handle masked keys separately to avoid overwriting with '***'
+        if 'appid' in data and '***' not in data['appid']:
+            config['appid'] = data['appid']
         if 'access_token' in data and '***' not in data['access_token']:
             config['access_token'] = data['access_token']
+        if 'tencent_secret_id' in data and '***' not in data['tencent_secret_id']:
+            config['tencent_secret_id'] = data['tencent_secret_id']
         if 'tencent_secret_key' in data and '***' not in data['tencent_secret_key']:
             config['tencent_secret_key'] = data['tencent_secret_key']
         save_config(config)
