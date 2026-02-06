@@ -289,7 +289,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-    <h1>TTS 服务</h1>
     <div class="card">
         <h2>服务商选择</h2>
         <div class="provider-select">
